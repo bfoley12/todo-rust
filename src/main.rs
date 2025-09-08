@@ -6,6 +6,12 @@ use serde::{Serialize, Deserialize};
 use std::fmt::Write;
 use csv::Trim;
 use textwrap::wrap;
+use directories::ProjectDirs;
+use std::{env, fs, path::PathBuf};
+
+const QUAL: &str = "com";
+const ORG: &str = "rustaecean";
+const APP: &str = "todo";
 
 // Standard clap argument parser
 #[derive(Parser, Debug)]
@@ -46,6 +52,17 @@ struct Record {
     date_completed: Option<DateTime<Utc>>,
 }
 
+fn default_todo_path() -> PathBuf {
+    if let Some(proj) = ProjectDirs::from(QUAL, ORG, APP) {
+        let dir = proj.data_dir().to_path_buf();
+        let _ = fs::create_dir_all(&dir);
+        return dir.join("todos.csv");
+    }
+    env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join("todos.csv")
+}
+
 #[derive(Copy, Clone)]
 enum Op { Eq, Ne, Contains, IContains }
 
@@ -70,7 +87,7 @@ fn filter_project(records: &mut Vec<Record>, op: Op, needle: String) {
 }
 
 fn main() {
-    let filepath: String = String::from("C:/Users/brend/Documents/Rust Learning/todo/list.csv");
+    let filepath: PathBuf = default_todo_path();
     let args = Args::parse();
     // Make file if needed
     let mut write_file = open_csv_writer_append(&filepath);
@@ -234,7 +251,7 @@ fn main() {
 }
 
 // Append mode: used when adding a single new record.
-fn open_csv_writer_append(path: &str) -> Writer<File> {
+fn open_csv_writer_append(path: &PathBuf) -> Writer<File> {
     let needs_headers = match std::fs::metadata(path) {
         Ok(md) => md.len() == 0,
         Err(_) => true,
@@ -252,7 +269,7 @@ fn open_csv_writer_append(path: &str) -> Writer<File> {
 }
 
 // Truncate mode: used when rewriting the entire file (e.g., after marking complete).
-fn open_csv_writer_truncate(path: &str) -> Writer<File> {
+fn open_csv_writer_truncate(path: &PathBuf) -> Writer<File> {
     let file = OpenOptions::new()
         .write(true)
         .truncate(true)
@@ -266,7 +283,7 @@ fn open_csv_writer_truncate(path: &str) -> Writer<File> {
 }
 
 
-fn open_csv_reader(path: &str) -> csv::Reader<File> {
+fn open_csv_reader(path: &PathBuf) -> csv::Reader<File> {
     let file = File::open(path).unwrap();
     csv::ReaderBuilder::new()
         .has_headers(true)     // ← important for deserialize::<Record>()
